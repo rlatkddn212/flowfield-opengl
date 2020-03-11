@@ -13,6 +13,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <queue>
 #include <time.h>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -33,9 +34,19 @@ int height = 768;
 const int cntX = 10;
 const int cntY = 10;
 int tiles[cntY][cntX];
+glm::vec2 direct[cntY][cntX];
+double dist[cntY][cntX];
+const double INF = 987654321;
 
 double gapX = (double)width / cntX;
 double gapY = (double)height / cntY;
+
+int posX;
+int posY;
+bool isPos;
+
+int dy[4] = { -1, 0 ,0, 1 };
+int dx[4] = { 0, -1, 1, 0};
 
 GLfloat green[] =
 {
@@ -236,6 +247,30 @@ void DrawLine(int v, int type)
 	glDrawArrays(GL_LINES, 0, 2);
 }
 
+float GetAngle(const glm::vec2& a, const glm::vec2& b)
+{
+	float cosAngle = glm::acos(glm::dot(a, b) / glm::length(a) * glm::length(b));
+	return (a.x * b.y - a.y * b.x > 0.0f) ? cosAngle : -cosAngle;
+}
+
+void DrawArrow(int y, int x, glm::vec2 dir)
+{
+	glm::mat4 matrix = glm::mat4(1.0f);
+
+	matrix = glm::translate(matrix, glm::vec3(-1.0 + (double)x / (cntX / 2) + gapX / width,
+		1.0 - (double)y / (cntY / 2) - gapY / height, 0.f));
+	
+	matrix = glm::scale(matrix, glm::vec3(1.0f / cntX, 1.0f / cntY, 1.f));
+	matrix = glm::rotate(matrix, GetAngle(dir, glm::vec2(1.0, 0.0)), glm::vec3(0.f, 0.0f, 1.0f));
+
+	glUniformMatrix4fv(gLoc, 1, GL_FALSE, (&matrix[0][0]));
+	glBindVertexArray(gArrowArrayID);
+
+	glVertexAttrib4fv(1, black);
+
+	glDrawArrays(GL_LINES, 0, 6);
+}
+
 // 배열 생성
 // 배열에 대한 정보 cost, 
 void update(double time)
@@ -264,6 +299,92 @@ void render()
 	{
 		DrawLine(x, 1);
 	}
+
+	for (int y = 0; y < cntY; ++y)
+	{
+		for (int x = 0; x < cntX; ++x)
+		{
+			if (tiles[y][x] != 1)
+				DrawArrow(y, x, direct[y][x]);
+		}
+	}
+}
+
+bool CheckRange(int y, int x) 
+{
+	if (0 <= x && x < cntX&& 0 <= y && y < cntY)
+	{
+		return true;
+	}
+
+	return false;
+}
+
+// 다익스트라
+void CreateFlowField(int y, int x)
+{
+
+	priority_queue<pair<double, pair<int, int>>> pq;
+
+	fill(&dist[0][0], &dist[cntY - 1][cntX], INF);
+	dist[y][x] = 0;
+	pq.push(make_pair(0, make_pair(y, x)));
+
+	while (!pq.empty())
+	{
+		double cost = -pq.top().first;
+		int ty = pq.top().second.first;
+		int tx = pq.top().second.second;
+		pq.pop();
+
+		if (dist[ty][tx] < cost) continue;
+
+		for (int i = 0; i < 4; ++i)
+		{
+			int nextY = dy[i] + ty;
+			int nextX = dx[i] + tx;
+			// 1이라고 가정한다.
+			double nextCost = cost + 1;
+			if (CheckRange(nextY, nextX) && tiles[nextY][nextX] != 1 && dist[nextY][nextX] > nextCost)
+			{
+				dist[nextY][nextX] = nextCost;
+				pq.push(make_pair(-nextCost, make_pair(nextY, nextX)));
+			}
+		}
+	}
+	
+	for (int i = 0; i < cntY; ++i)
+	{
+		for (int j = 0; j < cntY; ++j)
+		{
+			double cost = dist[i][j];
+			
+			double dir[4];
+
+			for (int d = 0; d < 4; ++d)
+			{
+				int nY = i + dy[d];
+				int nX = j + dx[d];
+
+				if (CheckRange(nY, nX) && tiles[nY][nX] != 1)
+				{
+					dir[d] = dist[nY][nX];
+				}
+				else
+				{
+					dir[d] = cost;
+				}
+			}
+
+			direct[i][j] = glm::normalize(glm::vec2(dir[1] - dir[2], dir[0] - dir[3]));
+		}
+	}
+
+	for (int y = 0; y < cntY; ++y)
+	{
+		for (int x = 0; x < cntY; ++x)
+			printf("%d %d : %f %f\n", y, x, direct[y][x].x, direct[y][x].y);
+	}
 }
 
 void HandleMouse(GLFWwindow* window, double xPos, double yPos)
@@ -281,6 +402,14 @@ void HandleMouseButton(GLFWwindow* window, int button, int action, int mods)
 	else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE)
 	{
 		printf("유닛 이동 cursorX : %f, cursorX : %f\n", cursorX, cursorY);
+
+		posX = cursorX / gapX;
+		posY = cursorY / gapY;
+		if (tiles[posY][posX] != 1)
+		{
+			isPos = true;
+			CreateFlowField(posY, posX);
+		}
 	}
 	// 왼쪽 마우스 클릭시
 	else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
@@ -293,8 +422,10 @@ void HandleMouseButton(GLFWwindow* window, int button, int action, int mods)
 		int x = cursorX / gapX;
 		int y = cursorY / gapY;
 
-		printf("지형 생성 x : %d, y : %d\n", x, y);
+		printf("지형 생성/삭제 x : %d, y : %d\n", x, y);
 		tiles[y][x] = tiles[y][x] ? 0 : 1;
+		if (isPos)
+			CreateFlowField(posY, posX);
 	}
 }
 
@@ -356,6 +487,9 @@ void initArrow()
 	glGenBuffers(1, &buffer);
 	glBindBuffer(GL_ARRAY_BUFFER, buffer);
 	glBufferData(GL_ARRAY_BUFFER, 18 * sizeof(GLfloat), vertexArrow, GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 }
 
 void initCircle()
@@ -402,6 +536,7 @@ void initGeometry()
 
 int main()
 {
+	isPos = false;
 	initGLFW();
 	initGLEW();
 	int width;
