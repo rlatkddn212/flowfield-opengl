@@ -31,8 +31,8 @@ GLuint gLoc;
 
 int width = 1024;
 int height = 768;
-const int cntX = 10;
-const int cntY = 10;
+const int cntX = 7;
+const int cntY = 7;
 int tiles[cntY][cntX];
 glm::vec2 direct[cntY][cntX];
 double dist[cntY][cntX];
@@ -207,9 +207,8 @@ void DrawRect(int y, int x, int type)
 {
 	glm::mat4 matrix = glm::mat4(1.0f);
 
-	matrix = glm::translate(matrix, glm::vec3(-1.0 + (double)x / (cntX/2) + gapX / width,
-		1.0 - (double)y / (cntY / 2) - gapY / height, 0.f));
-	//glm::rotate(matrix, 90.f, glm::vec3(0.f, 0.f, 1.f));
+	matrix = glm::translate(matrix, glm::vec3(-1.0f + (double)x / ((double)cntX / 2.0) + gapX / width,
+		1.0 - (double)y / ((double)cntY / 2.0) - gapY / height, 0.f));
 	matrix= glm::scale(matrix, glm::vec3(1.0f / cntX, 1.0f / cntY, 1.f));
 
 	glUniformMatrix4fv(gLoc, 1, GL_FALSE, (&matrix[0][0]));
@@ -232,8 +231,8 @@ void DrawLine(int v, int type)
 	glm::mat4 matrix = glm::mat4(1.0f);
 	if (type == 1)
 	{
-		matrix = glm::translate(matrix, glm::vec3(-1.0f + v * gapX * 2 / width, 0.0f, 0.0f));
-		matrix = glm::rotate(matrix, glm::radians(90.0f), glm::vec3(0.f,0.0f, 1.0f));
+		matrix = glm::translate(matrix, glm::vec3(-1.0f + v * gapX * 2.0f / width, 0.0f, 0.0f));
+		matrix = glm::rotate(matrix, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 	}
 	else
 	{
@@ -256,10 +255,8 @@ float GetAngle(const glm::vec2& a, const glm::vec2& b)
 void DrawArrow(int y, int x, glm::vec2 dir)
 {
 	glm::mat4 matrix = glm::mat4(1.0f);
-
-	matrix = glm::translate(matrix, glm::vec3(-1.0 + (double)x / (cntX / 2) + gapX / width,
-		1.0 - (double)y / (cntY / 2) - gapY / height, 0.f));
-	
+	matrix = glm::translate(matrix, glm::vec3(-1.0f + (double)x / ((double)cntX / 2.0) + gapX / width,
+		1.0 - (double)y / ((double)cntY / 2.0) - gapY / height, 0.f));
 	matrix = glm::scale(matrix, glm::vec3(1.0f / cntX, 1.0f / cntY, 1.f));
 	matrix = glm::rotate(matrix, GetAngle(dir, glm::vec2(1.0, 0.0)), glm::vec3(0.f, 0.0f, 1.0f));
 
