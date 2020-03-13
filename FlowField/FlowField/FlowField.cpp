@@ -29,10 +29,11 @@ GLuint gArrowArrayID;
 GLuint gCircleArrayID;
 GLuint gLoc;
 
+const int OBJ_SIZE = 10000;
 int width = 1024;
 int height = 768;
-const int cntX = 7;
-const int cntY = 7;
+const int cntX = 70;
+const int cntY = 70;
 int tiles[cntY][cntX];
 glm::vec2 direct[cntY][cntX];
 double dist[cntY][cntX];
@@ -64,10 +65,19 @@ GLfloat black[] =
 	0.0f, 0.0f, 0.0f, 1.0f
 };
 
-GLfloat white[] =
+GLfloat orange[] =
 {
-	1.0f, 1.0f, 1.0f, 1.0f
+	1.0f, 0.5f, 0.0f, 1.0f
 };
+
+struct RTSObject
+{
+	glm::vec2 pos;
+	glm::vec2 dir;
+	float speed;
+};
+
+vector<RTSObject> rtsObj;
 
 void initGLFW()
 {
@@ -269,11 +279,73 @@ void DrawArrow(int y, int x, glm::vec2 dir)
 	glDrawArrays(GL_LINES, 0, 6);
 }
 
+void DrawCircle(int y, int x)
+{
+	glm::mat4 matrix = glm::mat4(1.0f);
+	matrix = glm::translate(matrix, glm::vec3(-1.0f + (double)x / ((double)width / 2.0),
+		1.0 - (double)y / ((double)height / 2.0), 0.f));
+	matrix = glm::scale(matrix, glm::vec3(1.0f / cntX, 1.0f / cntY, 1.f));
+
+	glUniformMatrix4fv(gLoc, 1, GL_FALSE, (&matrix[0][0]));
+	glBindVertexArray(gCircleArrayID);
+
+	glVertexAttrib4fv(1, orange);
+
+	glDrawArrays(GL_TRIANGLE_STRIP, 0, 21);
+}
+
+void steeringBehaviourFlowField(RTSObject& obj) 
+{
+	glm::vec2 pos = obj.pos;
+	float fy = float(pos.y * cntY) / height;
+	float fx = float(pos.x * cntX) / width;
+	int y = fy;
+	int x = fx;
+
+	glm::vec2 f00, f01, f10, f11;
+
+	f00 = direct[y][x];
+	
+	f01 = (y + 1 < cntY && tiles[y+1][x] != 1) ? direct[y + 1][x] : direct[y][x];
+	f10 = (x + 1 < cntX && tiles[y][x + 1] != 1) ? direct[y][x + 1] : direct[y][x];
+	f11 = (x + 1 < cntX && y + 1 < cntY && tiles[y + 1][x + 1] != 1) ? direct[y + 1][x + 1] : direct[y][x];
+
+	float xWeight = fx - x;
+	float yWeight = fy - y;
+
+	glm::vec2 top = f00 * (1.0f - xWeight) + f10 * (xWeight);
+	glm::vec2 bottom = f01 * (1.0f - xWeight) + f11 * (xWeight);
+
+	glm::vec2 direction = top * (1.0f - yWeight) + bottom * yWeight;
+	if (glm::length(direction) > 0.1f) 
+	{
+		obj.dir = glm::normalize(direction);
+	}
+	else
+	{
+		obj.dir = direction;
+	}
+}
+
 // 배열 생성
 // 배열에 대한 정보 cost, 
 void update(double time)
 {
+	static double tempTime = 0.0;
+	double timeGap = time - tempTime;
+	tempTime = time;
+	for (size_t i = 0; i < rtsObj.size(); ++i)
+	{
+		steeringBehaviourFlowField(rtsObj[i]);
+	}
 
+	for (size_t i = 0; i < rtsObj.size(); ++i)
+	{
+		if (glm::length(rtsObj[i].dir) > 0.1f)
+		{
+			rtsObj[i].pos = rtsObj[i].pos + rtsObj[i].dir * rtsObj[i].speed * (float)timeGap;
+		}
+	}
 }
 
 
@@ -306,6 +378,11 @@ void render()
 				DrawArrow(y, x, direct[y][x]);
 		}
 	}
+
+	for (int i = 0; i < rtsObj.size(); ++i)
+	{
+		DrawCircle(rtsObj[i].pos.y, rtsObj[i].pos.x);
+	}
 }
 
 bool CheckRange(int y, int x)
@@ -336,7 +413,6 @@ bool CheckCorner(int y1, int x1, int y2, int x2)
 // 다익스트라
 void CreateFlowField(int y, int x)
 {
-
 	priority_queue<pair<double, pair<int, int>>> pq;
 
 	fill(&direct[0][0], &direct[cntY - 1][cntX], glm::vec2(0.0f,0.0f));
@@ -394,10 +470,19 @@ void CreateFlowField(int y, int x)
 	}
 }
 
+bool isPress = false;
+
 void HandleMouse(GLFWwindow* window, double xPos, double yPos)
 {
 	cursorX = xPos;
 	cursorY = yPos;
+
+	if (isPress)
+	{
+		int x = cursorX / gapX;
+		int y = cursorY / gapY;
+		tiles[y][x] = 1;
+	}
 }
 
 void HandleMouseButton(GLFWwindow* window, int button, int action, int mods)
@@ -421,10 +506,11 @@ void HandleMouseButton(GLFWwindow* window, int button, int action, int mods)
 	// 왼쪽 마우스 클릭시
 	else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
 	{
-
+		isPress = true;
 	}
 	else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
 	{
+		isPress = false;
 		// 배열에서 좌표를 구한다.
 		int x = cursorX / gapX;
 		int y = cursorY / gapY;
@@ -502,15 +588,15 @@ void initArrow()
 void initCircle()
 {
 	int steps = 10;
-	float radius = 1.0;
-	float* vertexCircle = new float[steps * 6];
+	float radius = 1.0f;
+	float* vertexCircle = new float[steps * 6 + 3];
 	float t = 0;
 	int pos = 0;
 	
 	for (int i = 0; i < steps; ++i) 
 	{
-		float x = radius * cos(t);
-		float y = radius * sin(t);
+		float x = radius * cos(glm::radians(t));
+		float y = radius * sin(glm::radians(t));
 
 		vertexCircle[pos++] = x;
 		vertexCircle[pos++] = y;
@@ -523,13 +609,22 @@ void initCircle()
 		t += 360 / steps;
 	}
 
+	float x = radius * cos(glm::radians(t));
+	float y = radius * sin(glm::radians(t));
+
+	vertexCircle[pos++] = x;
+	vertexCircle[pos++] = y;
+	vertexCircle[pos++] = 0.0f;
+
 	glGenVertexArrays(1, &gCircleArrayID);
 	glBindVertexArray(gCircleArrayID);
 	GLuint buffer;
 	glGenBuffers(1, &buffer);
 	glBindBuffer(GL_ARRAY_BUFFER, buffer);
-	glBufferData(GL_ARRAY_BUFFER, steps * 3 * sizeof(GLfloat), vertexCircle, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, (steps * 6 + 3) * sizeof(GLfloat), vertexCircle, GL_STATIC_DRAW);
 
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 	delete[] vertexCircle;
 }
 
@@ -541,8 +636,24 @@ void initGeometry()
 	initCircle();
 }
 
+void initObject()
+{
+	for(int i = 0; i < OBJ_SIZE; ++i)
+	{
+		RTSObject obj;
+		int randomX = rand() % width;
+		int randomY = rand() % height;
+
+		obj.pos = glm::vec2(randomX, randomY);
+		obj.speed = (i % 30) + 50;
+		rtsObj.push_back(obj);
+	}
+}
+
 int main()
 {
+	srand(time(NULL));
+
 	isPos = false;
 	initGLFW();
 	initGLEW();
@@ -554,6 +665,7 @@ int main()
 	glfwSetMouseButtonCallback(window, HandleMouseButton);
 
 	initGeometry();
+	initObject();
 	
 	// 공용으로 사용한다.
 	GLuint programID = LoadShaders("vertex.glsl", "Image.glsl");
