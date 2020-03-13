@@ -45,8 +45,9 @@ int posX;
 int posY;
 bool isPos;
 
-int dy[4] = { -1, 0 ,0, 1 };
-int dx[4] = { 0, -1, 1, 0};
+
+int dy[8] = { -1, -1, -1, 0 ,0, 1, 1, 1 };
+int dx[8] = { -1, 0, 1, -1, 1, -1, 0 ,1};
 
 GLfloat green[] =
 {
@@ -307,9 +308,9 @@ void render()
 	}
 }
 
-bool CheckRange(int y, int x) 
+bool CheckRange(int y, int x)
 {
-	if (0 <= x && x < cntX&& 0 <= y && y < cntY)
+	if (0 <= x && x < cntX && 0 <= y && y < cntY)
 	{
 		return true;
 	}
@@ -317,12 +318,28 @@ bool CheckRange(int y, int x)
 	return false;
 }
 
+
+bool CheckCorner(int y1, int x1, int y2, int x2)
+{
+	if (abs(y2 - y1) + abs(x2 - x1) == 2)
+	{
+		if (tiles[y2][x1] == 1 && tiles[y1][x2] == 1)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+
 // 다익스트라
 void CreateFlowField(int y, int x)
 {
 
 	priority_queue<pair<double, pair<int, int>>> pq;
 
+	fill(&direct[0][0], &direct[cntY - 1][cntX], glm::vec2(0.0f,0.0f));
 	fill(&dist[0][0], &dist[cntY - 1][cntX], INF);
 	dist[y][x] = 0;
 	pq.push(make_pair(0, make_pair(y, x)));
@@ -336,13 +353,14 @@ void CreateFlowField(int y, int x)
 
 		if (dist[ty][tx] < cost) continue;
 
-		for (int i = 0; i < 4; ++i)
+		for (int i = 0; i < 8; ++i)
 		{
 			int nextY = dy[i] + ty;
 			int nextX = dx[i] + tx;
-			// 1이라고 가정한다.
-			double nextCost = cost + 1;
-			if (CheckRange(nextY, nextX) && tiles[nextY][nextX] != 1 && dist[nextY][nextX] > nextCost)
+			
+			double nextCost = cost + sqrt((nextX - tx) * (nextX - tx) + (nextY - ty) * (nextY - ty));
+			if (CheckRange(nextY, nextX) && tiles[nextY][nextX] != 1 
+				&& !CheckCorner(ty, tx, nextY, nextX) && dist[nextY][nextX] > nextCost)
 			{
 				dist[nextY][nextX] = nextCost;
 				pq.push(make_pair(-nextCost, make_pair(nextY, nextX)));
@@ -352,35 +370,27 @@ void CreateFlowField(int y, int x)
 	
 	for (int i = 0; i < cntY; ++i)
 	{
-		for (int j = 0; j < cntY; ++j)
+		for (int j = 0; j < cntX; ++j)
 		{
 			double cost = dist[i][j];
-			
-			double dir[4];
+			int dir = -1;
 
-			for (int d = 0; d < 4; ++d)
+			for (int d = 0; d < 8; ++d)
 			{
 				int nY = i + dy[d];
 				int nX = j + dx[d];
-
-				if (CheckRange(nY, nX) && tiles[nY][nX] != 1)
+				if (CheckRange(nY, nX) && tiles[nY][nX] != 1 && !CheckCorner(i, j, nY, nX) && cost > dist[nY][nX])
 				{
-					dir[d] = dist[nY][nX];
-				}
-				else
-				{
-					dir[d] = cost;
+					cost = dist[nY][nX];
+					dir = d;
 				}
 			}
 
-			direct[i][j] = glm::normalize(glm::vec2(dir[1] - dir[2], dir[0] - dir[3]));
+			if (dir != -1)
+			{
+				direct[i][j] = glm::normalize(glm::vec2(dx[dir], dy[dir]));
+			}
 		}
-	}
-
-	for (int y = 0; y < cntY; ++y)
-	{
-		for (int x = 0; x < cntY; ++x)
-			printf("%d %d : %f %f\n", y, x, direct[y][x].x, direct[y][x].y);
 	}
 }
 
