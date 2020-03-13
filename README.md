@@ -22,6 +22,9 @@ c++로 flow field 알고리즘 개발
 충돌 처리 혹은 충돌 회피  
 RVO2도 사용해봐야겠다.
 
+#### 성능
+10만개 오브젝트를 추가해도 문제없이 동작한다.
+
 #### 참고 자료
 https://gamedevelopment.tutsplus.com/tutorials/understanding-goal-based-vector-field-pathfinding--gamedev-9007  
 https://howtorts.github.io/2014/01/04/basic-flow-fields.html  
